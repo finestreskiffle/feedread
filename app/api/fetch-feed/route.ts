@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       title: feed.title || 'Unknown Feed',
-      items: feed.items.map((item) => ({
+      items: feed.items.map((item: any) => ({
         title: item.title || 'No Title',
         link: item.link || '',
         content: item.content || item.contentSnippet || '',
