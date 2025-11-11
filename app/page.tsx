@@ -94,7 +94,7 @@ export default function Home() {
         content: item.content,
         contentSnippet: item.contentSnippet,
         author: item.author,
-        pubDate: item.pubDate ? new Date(item.pubDate) : undefined,
+        pubDate: item.pubDate || null,
         isRead: false,
         isFavorite: false,
       }));
@@ -108,7 +108,7 @@ export default function Home() {
       await fetch('/api/feeds', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: feed.id, lastFetched: new Date() }),
+        body: JSON.stringify({ id: feed.id, lastFetched: new Date().toISOString() }),
       });
 
       await loadData();
@@ -154,7 +154,7 @@ export default function Home() {
         body: JSON.stringify({
           id: newFeed.id,
           title: data.title,
-          lastFetched: new Date(),
+          lastFetched: new Date().toISOString(),
         }),
       });
 
@@ -165,7 +165,7 @@ export default function Home() {
         content: item.content,
         contentSnippet: item.contentSnippet,
         author: item.author,
-        pubDate: item.pubDate ? new Date(item.pubDate) : undefined,
+        pubDate: item.pubDate || null,
         isRead: false,
         isFavorite: false,
       }));
