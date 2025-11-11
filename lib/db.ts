@@ -36,7 +36,12 @@ export const db = {
     `;
     const categoryId = categoryRows[0]?.id || null;
 
-    const lastFetched = feed.lastFetched ? feed.lastFetched.toISOString() : null;
+    let lastFetched = null;
+    if (feed.lastFetched) {
+      lastFetched = typeof feed.lastFetched === 'string' 
+        ? feed.lastFetched 
+        : feed.lastFetched.toISOString();
+    }
     
     const { rows } = await sql`
       INSERT INTO feeds (title, url, category_id, last_fetched)
@@ -64,7 +69,13 @@ export const db = {
     }
     if (updates.lastFetched !== undefined) {
       fields.push(`last_fetched = $${paramCount++}`);
-      values.push(updates.lastFetched ? updates.lastFetched.toISOString() : null);
+      let lastFetched = null;
+      if (updates.lastFetched) {
+        lastFetched = typeof updates.lastFetched === 'string'
+          ? updates.lastFetched
+          : updates.lastFetched.toISOString();
+      }
+      values.push(lastFetched);
     }
     if (updates.category !== undefined) {
       const { rows: categoryRows } = await sql`
@@ -118,7 +129,12 @@ export const db = {
   async addArticles(articles: Omit<Article, 'id'>[]): Promise<void> {
     for (const article of articles) {
       try {
-        const pubDate = article.pubDate ? article.pubDate.toISOString() : null;
+        let pubDate = null;
+        if (article.pubDate) {
+          pubDate = typeof article.pubDate === 'string'
+            ? article.pubDate
+            : article.pubDate.toISOString();
+        }
         
         await sql`
           INSERT INTO articles (
