@@ -2,32 +2,62 @@
 
 import { useState, useEffect } from 'react';
 import { Feed, Article } from '@/lib/types';
-import { storage } from '@/lib/storage';
 import Sidebar from '@/components/Sidebar';
 import ArticleList from '@/components/ArticleList';
 import AddFeedModal from '@/components/AddFeedModal';
-import { RefreshCw, Settings } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 export default function Home() {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
-  const [categories, setCategories] = useState(storage.getCategories());
+  const [categories, setCategories] = useState<any[]>([]);
   const [selectedFeed, setSelectedFeed] = useState<string | null>(null);
   const [selectedView, setSelectedView] = useState<'all' | 'favorites' | 'unread'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
   // Load data on mount
   useEffect(() => {
-    setFeeds(storage.getFeeds());
-    setArticles(storage.getArticles());
+    loadData();
   }, []);
 
-  // Calculate unread counts
-  const unreadCounts = feeds.reduce((acc, feed) => {
-    acc[feed.id] = articles.filter((a) => a.feedId === feed.id && !a.isRead).length;
-    return acc;
-  }, {} as Record<string, number>);
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [feedsRes, articlesRes, categoriesRes, countsRes] = await Promise.all([
+        fetch('/api/feeds'),
+        fetch('/api/articles'),
+        fetch('/api/categories'),
+        fetch('/api/unread-counts'),
+      ]);
+
+      const feedsData = await feedsRes.json();
+      const articlesData = await articlesRes.json();
+      const categoriesData = await categoriesRes.json();
+      const countsData = await countsRes.json();
+
+      setFeeds(feedsData);
+      setArticles(articlesData);
+      setCategories(categoriesData);
+      setUnreadCounts(countsData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshUnreadCounts = async () => {
+    try {
+      const res = await fetch('/api/unread-counts');
+      const counts = await res.json();
+      setUnreadCounts(counts);
+    } catch (error) {
+      console.error('Error refreshing unread counts:', error);
+    }
+  };
 
   // Filter articles based on selection
   const filteredArticles = articles
@@ -57,8 +87,7 @@ export default function Home() {
 
       const data = await response.json();
 
-      const newArticles: Article[] = data.items.map((item: any) => ({
-        id: `${feed.id}-${item.guid || item.link}`,
+      const newArticles = data.items.map((item: any) => ({
         feedId: feed.id,
         title: item.title,
         link: item.link,
@@ -70,11 +99,19 @@ export default function Home() {
         isFavorite: false,
       }));
 
-      storage.addArticles(newArticles);
-      setArticles(storage.getArticles());
+      await fetch('/api/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ articles: newArticles }),
+      });
 
-      storage.updateFeed(feed.id, { lastFetched: new Date() });
-      setFeeds(storage.getFeeds());
+      await fetch('/api/feeds', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: feed.id, lastFetched: new Date() }),
+      });
+
+      await loadData();
     } catch (error) {
       console.error('Error fetching feed:', error);
       throw error;
@@ -82,17 +119,22 @@ export default function Home() {
   };
 
   const handleAddFeed = async (url: string, category: string) => {
-    const newFeed: Feed = {
-      id: Date.now().toString(),
+    const tempFeed = {
       title: 'Caricamento...',
       url,
       category,
     };
 
-    storage.addFeed(newFeed);
-    setFeeds(storage.getFeeds());
-
     try {
+      const addRes = await fetch('/api/feeds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tempFeed),
+      });
+
+      if (!addRes.ok) throw new Error('Failed to add feed');
+      const newFeed = await addRes.json();
+
       const response = await fetch('/api/fetch-feed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -100,21 +142,23 @@ export default function Home() {
       });
 
       if (!response.ok) {
+        await fetch(`/api/feeds?id=${newFeed.id}`, { method: 'DELETE' });
         throw new Error('Feed non valido');
       }
 
       const data = await response.json();
 
-      // Update feed with actual title
-      storage.updateFeed(newFeed.id, {
-        title: data.title,
-        lastFetched: new Date(),
+      await fetch('/api/feeds', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newFeed.id,
+          title: data.title,
+          lastFetched: new Date(),
+        }),
       });
-      setFeeds(storage.getFeeds());
 
-      // Add articles
-      const newArticles: Article[] = data.items.map((item: any) => ({
-        id: `${newFeed.id}-${item.guid || item.link}`,
+      const newArticles = data.items.map((item: any) => ({
         feedId: newFeed.id,
         title: item.title,
         link: item.link,
@@ -126,11 +170,15 @@ export default function Home() {
         isFavorite: false,
       }));
 
-      storage.addArticles(newArticles);
-      setArticles(storage.getArticles());
+      await fetch('/api/articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ articles: newArticles }),
+      });
+
+      await loadData();
     } catch (error) {
-      storage.deleteFeed(newFeed.id);
-      setFeeds(storage.getFeeds());
+      console.error('Error adding feed:', error);
       throw error;
     }
   };
@@ -148,14 +196,47 @@ export default function Home() {
     }
   };
 
-  const handleToggleRead = (articleId: string) => {
-    storage.toggleRead(articleId);
-    setArticles(storage.getArticles());
+  const handleToggleRead = async (articleId: string) => {
+    const article = articles.find((a) => a.id === articleId);
+    if (!article) return;
+
+    const updatedArticles = articles.map((a) =>
+      a.id === articleId ? { ...a, isRead: !a.isRead } : a
+    );
+    setArticles(updatedArticles);
+
+    try {
+      await fetch('/api/articles', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: articleId, isRead: !article.isRead }),
+      });
+      await refreshUnreadCounts();
+    } catch (error) {
+      console.error('Error toggling read:', error);
+      setArticles(articles);
+    }
   };
 
-  const handleToggleFavorite = (articleId: string) => {
-    storage.toggleFavorite(articleId);
-    setArticles(storage.getArticles());
+  const handleToggleFavorite = async (articleId: string) => {
+    const article = articles.find((a) => a.id === articleId);
+    if (!article) return;
+
+    const updatedArticles = articles.map((a) =>
+      a.id === articleId ? { ...a, isFavorite: !a.isFavorite } : a
+    );
+    setArticles(updatedArticles);
+
+    try {
+      await fetch('/api/articles', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: articleId, isFavorite: !article.isFavorite }),
+      });
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      setArticles(articles);
+    }
   };
 
   const handleOpenArticle = (article: Article) => {
@@ -164,6 +245,17 @@ export default function Home() {
     }
     window.open(article.link, '_blank');
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-600" />
+          <p className="text-gray-600 dark:text-gray-400">Caricamento...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen">
