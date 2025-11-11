@@ -31,7 +31,8 @@ Un lettore RSS personale moderno e completo, costruito con Next.js 14 e Tailwind
 - **Icone**: Lucide React
 - **Parser RSS**: rss-parser
 - **Date**: date-fns
-- **Storage**: localStorage (browser)
+- **Database**: Vercel Postgres
+- **Storage**: Postgres (sincronizzato tra dispositivi)
 
 ## 📦 Installazione
 
@@ -79,8 +80,17 @@ git push -u origin main
    - Vercel rileverà automaticamente Next.js
    - Clicca "Deploy"
 
-3. **Fatto!** 🎉
-   Il tuo RSS reader sarà disponibile su `https://my-rss-reader.vercel.app`
+3. **Setup Database** ⚠️ IMPORTANTE
+   - Dopo il primo deploy, devi configurare il database
+   - Segui la guida completa: **[DATABASE_SETUP.md](../DATABASE_SETUP.md)**
+   - In breve:
+     1. Vai su Vercel Dashboard > tuo progetto > Storage
+     2. Crea un database Postgres (gratuito)
+     3. Esegui lo script `schema.sql` nel Query Editor di Vercel
+     4. Redeploy il progetto
+
+4. **Fatto!** 🎉
+   Il tuo RSS reader sarà disponibile e funzionante con database persistente!
 
 ### Opzione 2: Deploy via CLI
 
