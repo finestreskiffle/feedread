@@ -36,9 +36,11 @@ export const db = {
     `;
     const categoryId = categoryRows[0]?.id || null;
 
+    const lastFetched = feed.lastFetched ? feed.lastFetched.toISOString() : null;
+    
     const { rows } = await sql`
       INSERT INTO feeds (title, url, category_id, last_fetched)
-      VALUES (${feed.title}, ${feed.url}, ${categoryId}, ${feed.lastFetched || null})
+      VALUES (${feed.title}, ${feed.url}, ${categoryId}, ${lastFetched})
       RETURNING *
     `;
     
@@ -62,7 +64,7 @@ export const db = {
     }
     if (updates.lastFetched !== undefined) {
       fields.push(`last_fetched = $${paramCount++}`);
-      values.push(updates.lastFetched);
+      values.push(updates.lastFetched ? updates.lastFetched.toISOString() : null);
     }
     if (updates.category !== undefined) {
       const { rows: categoryRows } = await sql`
@@ -116,6 +118,8 @@ export const db = {
   async addArticles(articles: Omit<Article, 'id'>[]): Promise<void> {
     for (const article of articles) {
       try {
+        const pubDate = article.pubDate ? article.pubDate.toISOString() : null;
+        
         await sql`
           INSERT INTO articles (
             feed_id, title, link, content, content_snippet, 
@@ -124,7 +128,7 @@ export const db = {
           VALUES (
             ${article.feedId}, ${article.title}, ${article.link}, 
             ${article.content || null}, ${article.contentSnippet || null},
-            ${article.author || null}, ${article.pubDate || null},
+            ${article.author || null}, ${pubDate},
             ${article.isRead}, ${article.isFavorite},
             ${article.link}
           )
